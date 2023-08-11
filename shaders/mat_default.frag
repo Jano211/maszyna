@@ -1,11 +1,6 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
 
 #include <common>
+#include <vertexoutput.glsl>
 
 #param (color, 0, 0, 4, diffuse)
 #param (diffuse, 1, 0, 1, diffuse)
@@ -20,11 +15,12 @@ layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
 layout(location = 1) out vec4 out_motion;
 #endif
+layout(location = 2) out vec4 out_highlights;
 
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 void main()
 {
 	vec4 tex_color = texture(diffuse, f_coord);
@@ -43,12 +39,9 @@ void main()
 	
 	fragcolor = apply_lights(fragcolor, fragnormal, tex_color.rgb, reflectivity, specularity, shadow_tone);
 	vec4 color = vec4(apply_fog(fragcolor), tex_color.a * alpha_mult);
-/*
-	float distance = dot(f_pos.xyz, f_pos.xyz);
-	     if( distance <= cascade_end.x ) { color.r += 0.25; }
-	else if( distance <= cascade_end.y ) { color.g += 0.25; }
-	else if( distance <= cascade_end.z ) { color.b += 0.25; }
-*/
+    out_highlights = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	
+
 #if POSTFX_ENABLED
     out_color = color;
 #else

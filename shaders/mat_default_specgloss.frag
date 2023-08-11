@@ -1,11 +1,7 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
 
 #include <common>
+#include <vertexoutput.glsl>
+
 
 #param (color, 0, 0, 4, diffuse)
 #param (diffuse, 1, 0, 1, diffuse)
@@ -23,11 +19,14 @@ layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
 layout(location = 1) out vec4 out_motion;
 #endif
+#if BLOOM_ENABLED
+layout(location = 2) out vec4 out_highlights;
+#endif
 
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 void main()
 {
 	vec4 tex_color = texture(diffuse, f_coord);

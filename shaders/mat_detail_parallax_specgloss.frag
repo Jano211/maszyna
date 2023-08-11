@@ -1,12 +1,6 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-in mat3 f_tbn; //tangent matrix nietransponowany; mnożyć przez f_tbn dla TangentLightPos; TangentViewPos; TangentFragPos;
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
-in vec3 TangentFragPos;
 
 #include <common>
+#include <vertexoutput.glsl>
 
 layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
@@ -41,7 +35,7 @@ uniform sampler2D detailnormalmap;
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 vec2 ParallaxMapping(vec2 f_coord, vec3 viewDir);
 
 void main()
@@ -68,9 +62,9 @@ void main()
 	normaldetail.z = sqrt(1.0 - clamp((dot(normaldetail.xy, normaldetail.xy)), 0.0, 1.0));
 	normaldetail.xyz = normaldetail.xyz * param[2].y;
 	normal.xy = normal_map.rg* 2.0 - 1.0;
-	normal.z = sqrt(1.0 - clamp((dot(normal.xy, normal.xy)), 0.0, 1.0));
+		normal.z = sqrt(max(0., 1. - dot(normal.xy, normal.xy)));
 	
-	vec3 fragnormal = normalize(f_tbn * normalize(vec3(normal.xy + normaldetail.xy, normal.z)));
+	vec3 fragnormal = normalize(getTbn() * normalize(vec3(normal.xy + normaldetail.xy, normal.z)));
 	float reflectivity = param[1].z * normal_map.a;
 	float specularity = specgloss_map.r;
 	float glossiness = specgloss_map.g * abs(param[1].w);

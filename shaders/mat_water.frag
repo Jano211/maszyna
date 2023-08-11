@@ -1,12 +1,6 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-in mat3 f_tbn;
-
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
 
 #include <common>
+#include <vertexoutput.glsl>
 
 layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
@@ -37,13 +31,14 @@ float move_factor = 0.0;
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 void main()
 {
 	//wave distortion
+	vec3 viewDir = normalize(vec3(0.0f, 0.0f, 0.0f) - TangentFragPos); //tangent view pos - tangent frag pos
+	vec2 texture_coords = f_coord;
 	move_factor += (param[2].z * time);
 	move_factor = mod(move_factor, 1.0);
-	vec2 texture_coords = f_coord;
 	vec2 distorted_tex_coord = texture(dudvmap, vec2(texture_coords.x + move_factor, texture_coords.y)).rg * 0.1;
 	distorted_tex_coord = texture_coords + vec2(distorted_tex_coord.x , distorted_tex_coord.y + move_factor);
 	vec2 total_distorted_tex_coord = (texture(dudvmap, distorted_tex_coord).rg * 2.0 - 1.0 ) * param[2].y;
@@ -53,14 +48,14 @@ void main()
 
 	vec3 fragcolor = ambient * 0.25;
 	
+	vec4 normal_map = texture(normalmap, f_coord);
 	vec3 normal;
 	normal.xy = (texture(normalmap, texture_coords).rg * 2.0 - 1.0);
-	normal.z = sqrt(1.0 - clamp((dot(normal.xy, normal.xy)), 0.0, 1.0));
-	vec3 fragnormal = normalize(f_tbn * normalize(normal.xyz));
-	float reflectivity = param[1].z * texture(normalmap, texture_coords ).a;
+	normal.z = sqrt(max(0., 1. - dot(normal.xy, normal.xy)));
+	vec3 fragnormal = normalize(getTbn() * normal);
+	float reflectivity = param[1].z * normal_map.a;
 	float specularity = 1.0;
 	glossiness = abs(param[1].w);
-	
 	fragcolor = apply_lights(fragcolor, fragnormal, tex_color.rgb, reflectivity, specularity, shadow_tone);
 
 	//fragcolor = mix(fragcolor, param[0].rgb, param[1].z);
@@ -71,7 +66,7 @@ void main()
 	// fresnel effect
 	vec3 view_dir = normalize(vec3(0.0f, 0.0f, 0.0f) - f_pos.xyz);
 	float fresnel = pow ( dot (f_normal, view_dir), 0.2 );
-	float fresnel_inv = ((fresnel - 1.0 ) * -1.0 );
+	float fresnel_inv = ((fresnel - 1.5 ) * -1.0 );
 	
 	vec4 color = vec4(apply_fog(clamp(fragcolor, 0.0, 1.0)), clamp((fresnel_inv + param[0].a), 0.0, 1.0));
 #if POSTFX_ENABLED
@@ -84,7 +79,7 @@ void main()
         vec2 a = (f_clip_future_pos.xy / f_clip_future_pos.w) * 0.5 + 0.5;;
         vec2 b = (f_clip_pos.xy / f_clip_pos.w) * 0.5 + 0.5;;
         
-        out_motion = vec4(a - b, 0.0f, 0.0f);
+        out_motion = vec4(a - b, 0.0f, tex_color.a * alpha_mult);
 	}
 #endif
 }

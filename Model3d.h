@@ -43,6 +43,7 @@ enum class TAnimType // rodzaj animacji
 	at_Sky, // animacja nieba
 	at_Digital, // dziesięciocyfrowy licznik mechaniczny (z cylindrami)
 	at_DigiClk, // zegar cyfrowy jako licznik na dziesięciościanach
+	at_External, // submodel otrzymuje już obliczoną macierz przekształcenia
 	at_Undefined // animacja chwilowo nieokreślona
 };
 
@@ -185,6 +186,7 @@ public:
 #ifndef EU07_USE_GEOMETRYINDEXING
 	int TriangleAdd(TModel3d *m, material_handle tex, int tri);
 #endif
+	void SetMatrix(const glm::mat4 &matrix);
 	void SetRotate(float3 vNewRotateAxis, float fNewAngle);
 	void SetRotateXYZ( Math3D::vector3 vNewAngles);
 	void SetRotateXYZ(float3 vNewAngles);
@@ -235,7 +237,8 @@ public:
 	float MaxY( float4x4 const &m );
     std::shared_ptr<std::vector<glm::vec2>> screen_touch_list; // for python screen touching
 	std::optional<gl::query> occlusion_query;
-    glm::mat4 future_transform;
+	glm::mat4 future_transform;
+	glm::mat4 transform;
 
 	void deserialize(std::istream&);
 	void serialize(std::ostream&,

@@ -124,7 +124,8 @@ bool opengl33_renderer::Init(GLFWwindow *Window)
         m_pick_shader = make_shader("vertexonly.vert", "pick.frag");
         m_pick_surface_shader = make_shader("simpleuv.vert", "pick_surface.frag");
 		m_billboard_shader = make_shader("simpleuv.vert", "billboard.frag");
-        m_celestial_shader = make_shader("celestial.vert", "celestial.frag");
+        m_sun_shader = make_shader("sun.vert", "sun.frag");
+        m_moon_shader = make_shader("moon.vert", "moon.frag");
         m_hiddenarea_shader = make_shader("hiddenarea.vert", "hiddenarea.frag");
         m_copy_shader = make_shader("quad.vert", "copy.frag");
 		if (Global.gfx_usegles)
@@ -385,7 +386,7 @@ bool opengl33_renderer::init_viewport(viewport_config &vp)
     glClearColor( 51.0f / 255.f, 102.0f / 255.f, 85.0f / 255.f, 1.f ); // initial background Color
 
 	glFrontFace(GL_CCW);
-	glEnable(GL_CULL_FACE);
+	//glEnable(GL_CULL_FACE);
 
 	glEnable(GL_DEPTH_TEST);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -430,6 +431,9 @@ bool opengl33_renderer::init_viewport(viewport_config &vp)
 		vp.msaa_fb = std::make_unique<gl::framebuffer>();
 		vp.msaa_fb->attach(*vp.msaa_rbc, GL_COLOR_ATTACHMENT0);
 		vp.msaa_fb->attach(*vp.msaa_rbd, GL_DEPTH_ATTACHMENT);
+
+		if (Global.gfx_bloom_layers)
+			vp.bloom = std::make_unique<Bloom>(glm::ivec2{vp.width, vp.height});
 
 		if (Global.gfx_postfx_chromaticaberration_enabled || Global.gfx_postfx_motionblur_enabled)
 		{
@@ -771,14 +775,22 @@ void opengl33_renderer::Render_pass(viewport_config &vp, rendermode const Mode)
             TModel3d *mask = vr->get_hiddenarea_mesh((vp.proj_type == viewport_config::vr_left) ? vr_interface::eye_left : vr_interface::eye_right);
 
             if (mask) {
-                glDisable(GL_CULL_FACE);
-                glDisable(GL_BLEND);
-                glDepthMask(GL_TRUE);
+				GLboolean restore_cull_face = ::glIsEnabled(GL_CULL_FACE);
+				GLboolean restore_blend = ::glIsEnabled(GL_BLEND);
+				GLboolean restore_depth_mask;
+				::glGetBooleanv(GL_DEPTH_WRITEMASK, &restore_depth_mask);
+				::glDisable(GL_CULL_FACE);
+				::glDisable(GL_BLEND);
+				::glDepthMask(GL_TRUE);
 
                 m_hiddenarea_shader->bind();
                 draw(mask->Root->m_geometry.handle);
 
-                glEnable(GL_CULL_FACE);
+				if (restore_cull_face)
+					::glEnable(GL_CULL_FACE);
+				if (restore_blend)
+					::glEnable(GL_BLEND);
+				::glDepthMask(restore_depth_mask);
             }
         }
 
@@ -903,12 +915,17 @@ void opengl33_renderer::Render_pass(viewport_config &vp, rendermode const Mode)
 				vp.msaa_fb->blit_to(vp.main2_fb.get(), vp.width, vp.height, GL_COLOR_BUFFER_BIT, GL_COLOR_ATTACHMENT0);
 			}
 
-			if (!Global.gfx_usegles && !Global.gfx_shadergamma)
-				glEnable(GL_FRAMEBUFFER_SRGB);
-
             gl::framebuffer *target = nullptr;
             if (vp.custom_backbuffer)
                 target = vp.backbuffer_fb.get();
+
+				if (Global.gfx_bloom_layers)
+			{
+				vp.bloom->Render(vp.main2_tex.get(), vp.main2_fb.get());
+						}
+
+			if (!Global.gfx_usegles && !Global.gfx_shadergamma)
+				glEnable(GL_FRAMEBUFFER_SRGB);
 
             if( Global.gfx_postfx_chromaticaberration_enabled ) {
                 glViewport(0, 0, vp.width, vp.height);
@@ -1626,17 +1643,20 @@ void opengl33_renderer::setup_drawing(bool const Alpha)
 	case rendermode::color:
 	case rendermode::reflections:
 	{
+		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 		break;
 	}
 	case rendermode::shadows:
 	{
+		glDisable(GL_CULL_FACE);
 		glCullFace(GL_FRONT);
 		break;
 	}
 	case rendermode::pickcontrols:
 	case rendermode::pickscenery:
 	{
+		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 		break;
 	}
@@ -1803,7 +1823,7 @@ bool opengl33_renderer::Render(world_environment *Environment)
 	}
 
 	// celestial bodies
-	m_celestial_shader->bind();
+	m_sun_shader->bind();
 	m_empty_vao->bind();
 
 	auto const &modelview = OpenGLMatrices.data(GL_MODELVIEW);
@@ -1829,6 +1849,12 @@ bool opengl33_renderer::Render(world_environment *Environment)
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	}
 	// moon
+	gl::program::unbind();
+	gl::vao::unbind();
+	::glPopMatrix();
+
+	m_empty_vao->bind();
+	m_moon_shader->bind();
 	{
 		Bind_Texture(0, m_moontexture);
 		glm::vec3 mooncolor(255.0f / 255.0f, 242.0f / 255.0f, 231.0f / 255.0f);
@@ -2164,6 +2190,24 @@ void opengl33_renderer::Bind_Material( material_handle const Material, TSubModel
 				m_textures.bind(unit, tex);
 				unit++;
 			}
+		}
+
+		if (material.depth_func.has_value())
+		{
+			glDepthFunc(material.depth_func.value());
+		}
+		else
+		{
+			glDepthFunc(GL_GEQUAL);
+		}
+
+		if (material.depth_mask.has_value())
+		{
+			glDepthMask(material.depth_mask.value());
+		}
+		else
+		{
+			glDepthMask(m_blendingenabled ? false : true);
 		}
 
 		material.shader->bind();
@@ -3299,7 +3343,7 @@ void opengl33_renderer::Render(scene::basic_cell::path_sequence::const_iterator 
 	case rendermode::shadows:
 	{
 		// NOTE: roads-based platforms tend to miss parts of shadows if rendered with either back or front culling
-		glDisable(GL_CULL_FACE);
+		//glDisable(GL_CULL_FACE);
 		break;
 	}
 	default:
@@ -3491,7 +3535,7 @@ void opengl33_renderer::Render(scene::basic_cell::path_sequence::const_iterator 
 	case rendermode::shadows:
     {
 		// restore standard face cull mode
-		::glEnable(GL_CULL_FACE);
+		//::glEnable(GL_CULL_FACE);
 		break;
 	}
 	default:

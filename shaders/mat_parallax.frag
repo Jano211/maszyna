@@ -1,12 +1,6 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-in mat3 f_tbn; //tangent matrix nietransponowany; mnożyć przez f_tbn dla TangentLightPos; TangentViewPos; TangentFragPos;
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
-in vec3 TangentFragPos;
 
 #include <common>
+#include <vertexoutput.glsl>
 
 layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
@@ -31,7 +25,7 @@ uniform sampler2D normalmap;
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 vec2 ParallaxMapping(vec2 f_coord, vec3 viewDir);
 
 void main()
@@ -51,10 +45,10 @@ void main()
 	vec3 fragcolor = ambient;
 
 	vec3 normal;
-	normal.xy = (texture(normalmap, f_coord_p).rg * 2.0 - 1.0);
-	normal.z = sqrt(1.0 - clamp((dot(normal.xy, normal.xy)), 0.0, 1.0));
-	vec3 fragnormal = normalize(f_tbn * normalize(normal.xyz));
-	float reflectivity = param[1].z * texture(normalmap, f_coord_p).a;
+	normal.xy = (texture(normalmap, f_coord).rg * 2.0 - 1.0);
+	normal.z = sqrt(max(0.0, 1.0 - dot(normal.xy, normal.xy)));
+	vec3 fragnormal = normalize(getTbn() * normal.xyz);
+	float reflectivity = param[1].z * texture(normalmap, f_coord).a;
 	float specularity = (tex_color.r + tex_color.g + tex_color.b) * 0.5;	
 	
 	fragcolor = apply_lights(fragcolor, fragnormal, tex_color.rgb, reflectivity, specularity, shadow_tone);
@@ -76,7 +70,8 @@ void main()
 }
 
 vec2 ParallaxMapping(vec2 f_coord, vec3 viewDir)
-{
+{	
+
 	float pos_len = length(f_pos.xyz);
 
 	if (pos_len > 100.0) {
@@ -93,7 +88,7 @@ vec2 ParallaxMapping(vec2 f_coord, vec3 viewDir)
 	float numLayers = mix(maxLayers, minLayers, clamp(LayersWeight, 0.0, 1.0)); // number of depth layers
 	float layerDepth = 1.0 / numLayers; // calculate the size of each layer
 	float currentLayerDepth = 0.0; // depth of current layer
-	vec2 P = viewDir.xy * param[2].y; // the amount to shift the texture coordinates per layer (from vector P)
+	vec2 P = viewDir.xy * param[2].z; // the amount to shift the texture coordinates per layer (from vector P)
 	vec2 deltaTexCoords = P / numLayers;
 
 	  
@@ -115,7 +110,7 @@ vec2 ParallaxMapping(vec2 f_coord, vec3 viewDir)
 	return finalTexCoords;
 #else
 	float height = texture(normalmap, f_coord).b;
-	vec2 p = viewDir.xy / viewDir.z * (height * (param[2].y - param[2].z) * 0.2);
+	vec2 p = viewDir.xy / viewDir.z * (height * (param[2].z - param[2].w) * 0.2);
 	return f_coord - p;
 #endif
 } 

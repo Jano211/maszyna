@@ -1203,6 +1203,27 @@ global_settings::ConfigParse_gfx( cParser &Parser, std::string_view const Token 
         Parser >> gfx_shadow_rank_cutoff;
         gfx_shadow_rank_cutoff = clamp(gfx_shadow_rank_cutoff, 1, 3);
     }
+	else if (Token == "gfx.bloom.layers")
+    {
+        Parser.getTokens(1);
+        Parser >> gfx_bloom_layers;
+        gfx_bloom_layers = clamp(gfx_bloom_layers, 1, 16);
+    }
+    else if (Token == "gfx.bloom.threshold")
+    {
+        Parser.getTokens(1);
+        Parser >> gfx_bloom_threshold;
+    }
+    else if (Token == "gfx.bloom.knee")
+    {
+        Parser.getTokens(1);
+        Parser >> gfx_blom_knee;
+    }
+    else if (Token == "gfx.bloom.mix")
+    {
+        Parser.getTokens(1);
+        Parser >> gfx_blom_mix;
+    }
     else
     {
         tokenparsed = false;

@@ -15,11 +15,12 @@ http://mozilla.org/MPL/2.0/.
 #include "ResourceManager.h"
 #include "gl/ubo.h"
 
+#include <dxgiformat.h>
+#include "DDS.h"
+
 struct opengl_texture {
-    static DDSURFACEDESC2 deserialize_ddsd(std::istream&);
-    static DDCOLORKEY deserialize_ddck(std::istream&);
-    static DDPIXELFORMAT deserialize_ddpf(std::istream&);
-    static DDSCAPS2 deserialize_ddscaps(std::istream&);
+
+    void deserialize_ddsheader(std::istream &is, DirectX::DDS_HEADER &header, DirectX::DDS_HEADER_DXT10 &headerdx10);
 
 // constructors
     opengl_texture() = default;
@@ -81,7 +82,7 @@ private:
     void load_TEX();
     void load_STBI();
     void load_TGA();
-    void set_filtering() const;
+    void set_filtering(GLenum target = GL_TEXTURE_2D) const;
     void downsize( GLuint const Format );
     void flip_vertical();
     void gles_match_internalformat(GLuint format);
@@ -106,9 +107,10 @@ private:
     std::atomic<bool> is_loaded{ false }; // indicates the texture data was loaded and can be processed
     std::atomic<bool> is_good{ false }; // indicates the texture data was retrieved without errors
 */
-    static std::unordered_map<GLint, int> precompressed_formats;
+	static std::unordered_map<GLint, int> precompressed_formats;
+	static std::unordered_map<GLint, std::tuple<GLint, GLint, int>> raw_formats;
     static std::unordered_map<GLint, GLint> drivercompressed_formats;
-    static std::unordered_map<GLint, std::unordered_map<GLint, GLint>> mapping;
+	static std::unordered_map<GLint, std::unordered_map<GLint, GLint>> mapping;
 };
 
 typedef int texture_handle;

@@ -12,6 +12,8 @@ http://mozilla.org/MPL/2.0/.
 #include <string>
 #include <functional>
 
+#include "anim2.hpp"
+
 #include "Classes.h"
 #include "material.h"
 #include "MOVER.h"
@@ -27,16 +29,20 @@ http://mozilla.org/MPL/2.0/.
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-int const ANIM_WHEELS = 0; // koła
-int const ANIM_DOORS = 1; // drzwi
-int const ANIM_LEVERS = 2; // elementy obracane (wycieraczki, koła skrętne, przestawiacze, klocki ham.)
-int const ANIM_BUFFERS = 3; // elementy przesuwane (zderzaki)
-int const ANIM_BOOGIES = 4; // wózki (są skręcane w dwóch osiach)
-int const ANIM_PANTS = 5; // pantografy
-int const ANIM_STEAMS = 6; // napęd parowozu
-int const ANIM_DOORSTEPS = 7;
-int const ANIM_MIRRORS = 8;
-int const ANIM_TYPES = 9; // Ra: ilość typów animacji
+enum DynamicAnimTypes
+{
+	ANIM_WHEELS, // koła
+	ANIM_DOORS, // drzwi
+	ANIM_LEVERS, // elementy obracane (wycieraczki, koła skrętne, przestawiacze, klocki ham.)
+	ANIM_BUFFERS, // elementy przesuwane (zderzaki)
+	ANIM_BOOGIES, // wózki (są skręcane w dwóch osiach)
+	ANIM_PANTS, // pantografy
+	ANIM_STEAMS, // napęd parowozu
+  ANIM_DOORSTEPS,
+  ANIM_MIRRORS,
+  ANIM_CUTOFF,
+	ANIM_TYPES // Ra: ilość typów animacji
+};
 
 class TAnim;
 //typedef void(__closure *TUpdate)(TAnim *pAnim); // typ funkcji aktualizującej położenie submodeli
@@ -265,7 +271,23 @@ private:
     std::vector<TAnim> pAnimations;
     TSubModel ** pAnimated; // lista animowanych submodeli (może być ich więcej niż obiektów animujących)
     double dWheelAngle[3]; // kąty obrotu kół: 0=przednie toczne, 1=napędzające i wiązary, 2=tylne toczne
-/*
+
+  // MichauSto: dowiązania do nowego systemu animacji
+	struct TAnim2EntryDynObj
+	{
+		TSubModel *submodel; // Wskaźnik do submodelu w hierarchii
+		std::shared_ptr<TAnim2> animation; // Dane źródłowe animacji
+		DynamicAnimTypes sources[2]; // Identyfikatory źródła animacji (DynamicAnimTypes)
+		int source_indices[2]; // Dodatkowe indeksy źródła animacji zależne od kontekstu
+		float source_time_scale[2]; // Skalowanie czasu animacji do przedziału [0; 1)
+		int num_sources; // Liczba źródeł animacji (1 lub 2)
+	};
+	// Tablica animacji nowego systemu
+	std::vector<TAnim2EntryDynObj> pAnimationsNew;
+	void EvaluateAnimSource(DynamicAnimTypes type, int index, float& current, float& future);
+  void UpdateAnim2(); // Przeliczenie wszystkich animacji nowego typu
+
+	/*
     void UpdateNone(TAnim *pAnim){}; // animacja pusta (funkcje ustawiania submodeli, gdy blisko kamery)
 */
     void UpdateAxle(TAnim *pAnim); // animacja osi

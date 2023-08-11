@@ -43,6 +43,15 @@ std::unordered_map<GLint, int> opengl_texture::precompressed_formats =
     { GL_COMPRESSED_RGBA_S3TC_DXT1_EXT, 8 },
     { GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, 16 },
     { GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, 16 },
+    { GL_COMPRESSED_RGBA_BPTC_UNORM_EXT, 16 },
+    {GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT, 16},
+    { GL_COMPRESSED_RED_RGTC1, 8 },
+    { GL_COMPRESSED_RG_RGTC2, 16 },
+};
+
+std::unordered_map<GLint, std::tuple<GLint, GLint, int>> opengl_texture::raw_formats = {
+    {GL_RGBA16F, {GL_RGBA, GL_HALF_FLOAT, 8}},
+    {GL_RG16F, {GL_RG, GL_HALF_FLOAT, 4}},
 };
 
 std::unordered_map<GLint, GLint> opengl_texture::drivercompressed_formats =
@@ -82,6 +91,24 @@ std::unordered_map<GLint, std::unordered_map<GLint, GLint>> opengl_texture::mapp
                                           { GL_RGB,        GL_COMPRESSED_RGBA_S3TC_DXT5_EXT },
                                           { GL_RG,         GL_COMPRESSED_RGBA_S3TC_DXT5_EXT },
                                           { GL_RED,        GL_COMPRESSED_RGBA_S3TC_DXT5_EXT } } },
+    { GL_COMPRESSED_RGBA_BPTC_UNORM_EXT, { { GL_SRGB_ALPHA, GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT },
+                                          { GL_SRGB,       GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT },
+                                          { GL_RGBA,       GL_COMPRESSED_RGBA_BPTC_UNORM_EXT },
+                                          { GL_RGB,        GL_COMPRESSED_RGBA_BPTC_UNORM_EXT },
+                                          { GL_RG,         GL_COMPRESSED_RGBA_BPTC_UNORM_EXT },
+                                          { GL_RED,        GL_COMPRESSED_RGBA_BPTC_UNORM_EXT } } },
+    { GL_COMPRESSED_RED_RGTC1,          { { GL_SRGB_ALPHA, GL_COMPRESSED_RED_RGTC1 },
+                                          { GL_SRGB,       GL_COMPRESSED_RED_RGTC1 },
+                                          { GL_RGBA,       GL_COMPRESSED_RED_RGTC1 },
+                                          { GL_RGB,        GL_COMPRESSED_RED_RGTC1 },
+                                          { GL_RG,         GL_COMPRESSED_RED_RGTC1 },
+                                          { GL_RED,        GL_COMPRESSED_RED_RGTC1 } } },
+    { GL_COMPRESSED_RG_RGTC2,           { { GL_SRGB_ALPHA, GL_COMPRESSED_RG_RGTC2 },
+                                          { GL_SRGB,       GL_COMPRESSED_RG_RGTC2 },
+                                          { GL_RGBA,       GL_COMPRESSED_RG_RGTC2 },
+                                          { GL_RGB,        GL_COMPRESSED_RG_RGTC2 },
+                                          { GL_RG,         GL_COMPRESSED_RG_RGTC2 },
+                                          { GL_RED,        GL_COMPRESSED_RG_RGTC2 } } },
     { GL_RGBA,                          { { GL_SRGB_ALPHA, GL_SRGB8_ALPHA8 },
                                           { GL_SRGB,       GL_SRGB8 },
                                           { GL_RGBA,       GL_RGBA8 },
@@ -228,6 +255,13 @@ void opengl_texture::gles_match_internalformat(GLuint internalformat)
         data_format = GL_RED;
 
     data = out;
+}
+
+void opengl_texture::deserialize_ddsheader(std::istream &is, DirectX::DDS_HEADER &header, DirectX::DDS_HEADER_DXT10 &headerdx10)
+{
+	is.read((char *)&header, sizeof(header));
+	if ((header.flags & DDS_FOURCC) && header.ddspf.fourCC == MAKEFOURCC('D', 'X', '1', '0'))
+		is.read((char *)&headerdx10, sizeof(headerdx10));
 }
 
 // loads texture data from specified file
@@ -408,70 +442,6 @@ opengl_texture::make_request() {
 	Application.request( { ToLower( components.front() ), dictionary, rt } );
 }
 
-DDCOLORKEY opengl_texture::deserialize_ddck(std::istream &s)
-{
-	DDCOLORKEY ddck;
-
-	ddck.dwColorSpaceLowValue = sn_utils::ld_uint32(s);
-	ddck.dwColorSpaceHighValue = sn_utils::ld_uint32(s);
-
-	return ddck;
-}
-
-DDPIXELFORMAT opengl_texture::deserialize_ddpf(std::istream &s)
-{
-	DDPIXELFORMAT ddpf;
-
-	ddpf.dwSize = sn_utils::ld_uint32(s);
-	ddpf.dwFlags = sn_utils::ld_uint32(s);
-	ddpf.dwFourCC = sn_utils::ld_uint32(s);
-	ddpf.dwRGBBitCount = sn_utils::ld_uint32(s);
-	ddpf.dwRBitMask = sn_utils::ld_uint32(s);
-	ddpf.dwGBitMask = sn_utils::ld_uint32(s);
-	ddpf.dwBBitMask = sn_utils::ld_uint32(s);
-	ddpf.dwRGBAlphaBitMask = sn_utils::ld_uint32(s);
-
-	return ddpf;
-}
-
-DDSCAPS2 opengl_texture::deserialize_ddscaps(std::istream &s)
-{
-	DDSCAPS2 ddsc;
-
-	ddsc.dwCaps = sn_utils::ld_uint32(s);
-	ddsc.dwCaps2 = sn_utils::ld_uint32(s);
-	ddsc.dwCaps3 = sn_utils::ld_uint32(s);
-	ddsc.dwCaps4 = sn_utils::ld_uint32(s);
-
-	return ddsc;
-}
-
-DDSURFACEDESC2 opengl_texture::deserialize_ddsd(std::istream &s)
-{
-	DDSURFACEDESC2 ddsd;
-
-	ddsd.dwSize = sn_utils::ld_uint32(s);
-	ddsd.dwFlags = sn_utils::ld_uint32(s);
-	ddsd.dwHeight = sn_utils::ld_uint32(s);
-	ddsd.dwWidth = sn_utils::ld_uint32(s);
-	ddsd.lPitch = sn_utils::ld_uint32(s);
-	ddsd.dwBackBufferCount = sn_utils::ld_uint32(s);
-	ddsd.dwMipMapCount = sn_utils::ld_uint32(s);
-	ddsd.dwAlphaBitDepth = sn_utils::ld_uint32(s);
-	ddsd.dwReserved = sn_utils::ld_uint32(s);
-	sn_utils::ld_uint32(s);
-	ddsd.lpSurface = nullptr;
-	ddsd.ddckCKDestOverlay = deserialize_ddck(s);
-	ddsd.ddckCKDestBlt = deserialize_ddck(s);
-	ddsd.ddckCKSrcOverlay = deserialize_ddck(s);
-	ddsd.ddckCKSrcBlt = deserialize_ddck(s);
-	ddsd.ddpfPixelFormat = deserialize_ddpf(s);
-	ddsd.ddsCaps = deserialize_ddscaps(s);
-	ddsd.dwTextureStage = sn_utils::ld_uint32(s);
-
-	return ddsd;
-}
-
 void
 opengl_texture::load_DDS() {
 
@@ -490,41 +460,85 @@ opengl_texture::load_DDS() {
         return;
     }
 
-	DDSURFACEDESC2 ddsd = deserialize_ddsd(file);
-	filesize -= 124;
+	DirectX::DDS_HEADER header{};
+	DirectX::DDS_HEADER_DXT10 headerDx10{};
+	deserialize_ddsheader(file, header, headerDx10);
 
     //
     // This .dds loader supports the loading of compressed formats DXT1, DXT3
     // and DXT5.
     //
 
-    switch (ddsd.ddpfPixelFormat.dwFourCC)
+	int blockSize = 0;
+
+	switch (header.ddspf.fourCC)
     {
-    case FOURCC_DXT1:
+	case MAKEFOURCC('D', 'X', 'T', '1'):
         // DXT1's compression ratio is 8:1
         data_format = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+		    blockSize = 8;
         break;
 
-    case FOURCC_DXT3:
+	case MAKEFOURCC('D', 'X', 'T', '3'):
         // DXT3's compression ratio is 4:1
         data_format = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+		    blockSize = 16;
         break;
 
-    case FOURCC_DXT5:
+	case MAKEFOURCC('D', 'X', 'T', '5'):
         // DXT5's compression ratio is 4:1
         data_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+		    blockSize = 16;
         break;
 
-    default:
-        data_state = resource_state::failed;
-        return;
-    }
+	case MAKEFOURCC('D', 'X', '1', '0'):
+		    switch (headerDx10.dxgiFormat)
+		    {
+		    case DXGI_FORMAT_BC1_UNORM:
+		    	    data_format = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+		    	    blockSize = 8;
+		    	    break;
+		    case DXGI_FORMAT_BC2_UNORM:
+		    	    data_format = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+		    	    blockSize = 16;
+		    	    break;
+		    case DXGI_FORMAT_BC3_UNORM:
+		    	    data_format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+		    	    blockSize = 16;
+		    	    break;
+		    case DXGI_FORMAT_BC4_UNORM:
+		    	    data_format = GL_COMPRESSED_RED_RGTC1;
+		    	    blockSize = 8;
+		    	    break;
+		    case DXGI_FORMAT_BC5_UNORM:
+		    	    data_format = GL_COMPRESSED_RG_RGTC2;
+		    	    blockSize = 16;
+			        break;
+		    case DXGI_FORMAT_R16G16B16A16_FLOAT:
+			    data_format = GL_RGBA16F;
+			    break;
+		    case DXGI_FORMAT_R16G16_FLOAT:
+			    data_format = GL_RG16F;
+			    break;
+		    case DXGI_FORMAT_BC7_UNORM:
+			    data_format = GL_COMPRESSED_RGBA_BPTC_UNORM_EXT;
+			    break;
+        default:
+              data_state = resource_state::failed;
+              return;
+        }
+		    break;
+	default:
+		    data_state = resource_state::failed;
+		    return;
+	}
 
-    data_width = ddsd.dwWidth;
-    data_height = ddsd.dwHeight;
-    data_mapcount = ddsd.dwMipMapCount;
-
-    int blockSize = ( data_format == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT ? 8 : 16 );
+  if (DirectX::IsCubemap(header))
+		target = GL_TEXTURE_CUBE_MAP;
+	data_width = header.width;
+  ;
+	data_height = header.height;
+	data_mapcount = header.mipMapCount;
     int offset = 0;
 
     while( ( data_width > Global.CurrentMaxTextureSize ) || ( data_height > Global.CurrentMaxTextureSize ) ) {
@@ -535,7 +549,7 @@ opengl_texture::load_DDS() {
         --data_mapcount;
         WriteLog( "Texture pixelcount exceeds specified limits, skipping mipmap level" );
     };
-
+    
     if( data_mapcount <= 0 ) {
         // there's a chance we've discarded the provided mipmap(s) as too large
         WriteLog( "Texture \"" + name + "\" has no mipmaps which can fit currently set texture pixelcount limits." );
@@ -562,34 +576,47 @@ opengl_texture::load_DDS() {
     file.read((char *)&data[0], datasize);
     filesize -= datasize;
 
+  // TODO implement flipping for BC4/BC5 textures
 	// we're storing texture data internally with bottom-left origin,
 	// while DDS stores it with top-left origin. we need to flip it.
-	if (Global.dds_upper_origin)
+	//if (Global.dds_upper_origin)
+	//{
+  //      char *mipmap = (char*)&data[0];
+  //      int mapcount = data_mapcount,
+  //          width = data_width,
+  //          height = data_height;
+  //      while (mapcount)
+	//	{
+	//		if (ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT1)
+	//			flip_s3tc::flip_dxt1_image(mipmap, width, height);
+	//		else if (ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT3)
+	//			flip_s3tc::flip_dxt23_image(mipmap, width, height);
+	//		else if (ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT5)
+	//			flip_s3tc::flip_dxt45_image(mipmap, width, height);
+  //
+  //          mipmap += ( ( width + 3 ) / 4 ) * ( ( height + 3 ) / 4 ) * blockSize;
+  //          width = std::max( width / 2, 4 );
+  //          height = std::max( height / 2, 4 );
+  //          --mapcount;
+  //      }
+	//}
+
+	switch (data_format)
 	{
-        char *mipmap = (char*)&data[0];
-        int mapcount = data_mapcount,
-            width = data_width,
-            height = data_height;
-        while (mapcount)
-		{
-			if (ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT1)
-				flip_s3tc::flip_dxt1_image(mipmap, width, height);
-			else if (ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT3)
-				flip_s3tc::flip_dxt23_image(mipmap, width, height);
-			else if (ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT5)
-				flip_s3tc::flip_dxt45_image(mipmap, width, height);
-
-            mipmap += ( ( width + 3 ) / 4 ) * ( ( height + 3 ) / 4 ) * blockSize;
-            width = std::max( width / 2, 4 );
-            height = std::max( height / 2, 4 );
-            --mapcount;
-        }
+	case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT:
+		    data_components = GL_RGB;
+		    break;
+	case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
+	case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
+		    data_components = GL_RGBA;
+		    break;
+	case GL_COMPRESSED_RED_RGTC1:
+		    data_components = GL_RED;
+		    break;
+	case GL_COMPRESSED_RG_RGTC2:
+		    data_components = GL_RG;
+		    break;
 	}
-
-    data_components =
-        ( ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT1 ?
-            GL_RGB :
-            GL_RGBA );
 
     data_state = resource_state::good;
 
@@ -916,7 +943,7 @@ opengl_texture::create( bool const Static ) {
     // as a placeholder until it can be loaded again
     if( id == -1 ) {
 
-        ::glGenTextures( 1, &id );
+        ::glGenTextures(1, &id);
         ::glBindTexture( target, id );
 
         // analyze specified texture traits
@@ -971,6 +998,124 @@ opengl_texture::create( bool const Static ) {
                     glTexImage3DMultisample( target, samples, data_format, data_width, data_height, layers, GL_FALSE );
             }
         }
+		else if (GL_TEXTURE_CUBE_MAP == target)
+		{
+			::glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			::glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			set_filtering(target);
+			::glTexParameteri(target, GL_TEXTURE_MIN_FILTER, data_mapcount > 1 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+			::glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			::glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, data_mapcount - 1);
+			::glTexParameterf(target, GL_TEXTURE_LOD_BIAS, 0.f);
+
+			// data_format and data_type specifies how image is laid out in memory
+			// data_components specifies what useful channels image contains
+			// components_hint specifies what format we want to load
+
+			// now map that mess into opengl internal format
+
+			GLint components = data_components;
+			auto f_it = precompressed_formats.find(data_format);
+			if (f_it != precompressed_formats.end())
+				components = data_format;
+
+			if (!components_hint)
+				components_hint = GL_SRGB_ALPHA;
+
+			GLint internal_format = mapping[components][components_hint];
+
+			if (Global.gfx_usegles)
+			{
+				// GLES cannot generate mipmaps on SRGB8
+				if (internal_format == GL_SRGB8)
+					internal_format = GL_SRGB8_ALPHA8;
+
+				gles_match_internalformat(internal_format);
+			}
+
+			auto raw_it = raw_formats.find(data_format);
+			auto blocksize_it = precompressed_formats.find(internal_format);
+
+			if (data_mapcount == 1 && !glGenerateMipmap)
+			{
+				glTexParameteri(target, GL_GENERATE_MIPMAP, GL_TRUE);
+			}
+
+			constexpr static std::array<GLenum, 6> faces{
+			    GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+			    GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+
+			    GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+			    GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+
+			    GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+          GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+			};
+
+			for (const auto &face : faces)
+			{
+				datawidth = data_width;
+				dataheight = data_height;
+				for (int maplevel = 0; maplevel < data_mapcount; ++maplevel)
+				{
+					if (raw_it != raw_formats.end())
+					{
+						// compressed dds formats
+						const auto &[format, type, pixelsize] = raw_it->second;
+
+						::glTexImage2D(face, maplevel, data_format, datawidth, dataheight, 0,
+						               format, type, (GLubyte *)&data[dataoffset]);
+
+						dataoffset += datawidth * dataheight * pixelsize;
+						datawidth = std::max(datawidth / 2, 1);
+						dataheight = std::max(dataheight / 2, 1);
+					}
+					else if (blocksize_it != precompressed_formats.end())
+					{
+						// compressed dds formats
+						const int datablocksize = blocksize_it->second;
+
+						datasize = ((std::max(datawidth, 4) + 3) / 4) *
+						           ((std::max(dataheight, 4) + 3) / 4) * datablocksize;
+						dataoffset += datasize;
+
+						::glCompressedTexImage2D(face, maplevel, internal_format, datawidth,
+						                         dataheight, 0, datasize,
+						                         (GLubyte *)&data[dataoffset]);
+
+						datawidth = std::max(datawidth / 2, 1);
+						dataheight = std::max(dataheight / 2, 1);
+					}
+					else
+					{
+						GLint compressed_format = drivercompressed_formats[internal_format];
+
+						// uncompressed texture data. have the gfx card do the compression as it
+						// sees fit
+						::glTexImage2D(face, maplevel,
+						               GL_RGBA16F, //Global.compress_tex ? compressed_format : internal_format,
+						               data_width, data_height, 0, data_format, data_type,
+						               (GLubyte *)&data[dataoffset]);
+						dataoffset += datawidth * dataheight * 8;
+						datawidth = std::max(datawidth / 2, 1);
+						dataheight = std::max(dataheight / 2, 1);
+					}
+				}
+			}
+
+			if (data_mapcount == 1 && glGenerateMipmap)
+			{
+				glGenerateMipmap(target);
+			}
+
+			if ((true == Global.ResourceMove) || (false == Global.ResourceSweep))
+			{
+				// if garbage collection is disabled we don't expect having to upload the texture
+				// more than once
+				data = std::vector<unsigned char>();
+				data_state = resource_state::none;
+			}
+		}
         else
         {
 			::glTexParameteri(target, GL_TEXTURE_WRAP_S, wrap_mode_s);
@@ -1002,6 +1147,7 @@ opengl_texture::create( bool const Static ) {
                 gles_match_internalformat(internal_format);
             }
 
+			auto raw_it = raw_formats.find(data_format);
             auto blocksize_it = precompressed_formats.find(internal_format);
 
             if ( data_mapcount == 1 && !glGenerateMipmap ) {
@@ -1010,7 +1156,21 @@ opengl_texture::create( bool const Static ) {
 
             for( int maplevel = 0; maplevel < data_mapcount; ++maplevel ) {
 
-                if (blocksize_it != precompressed_formats.end())
+                
+					if (raw_it != raw_formats.end())
+					{
+						// compressed dds formats
+						const auto &[format, type, pixelsize] = raw_it->second;
+
+						::glTexImage2D(target, maplevel, data_format, datawidth, dataheight,
+					                   0,
+						               format, type, (GLubyte *)&data[dataoffset]);
+
+						dataoffset += datawidth * dataheight * pixelsize;
+						datawidth = std::max(datawidth / 2, 1);
+						dataheight = std::max(dataheight / 2, 1);
+					}
+					else if (blocksize_it != precompressed_formats.end())
                 {
                     // compressed dds formats
                     const int datablocksize = blocksize_it->second;
@@ -1031,10 +1191,10 @@ opengl_texture::create( bool const Static ) {
 
                     // uncompressed texture data. have the gfx card do the compression as it sees fit
                     ::glTexImage2D(
-                        target, 0,
+					    target, maplevel,
                         Global.compress_tex ? compressed_format : internal_format,
-                        data_width, data_height, 0,
-                        data_format, data_type, (GLubyte *)&data[ 0 ] );
+                        data_width, data_height, 0, data_format, data_type,
+					               (GLubyte *)&data[dataoffset]);
                 }
             }
 
@@ -1160,17 +1320,16 @@ opengl_texture::reset_unit_cache() {
     m_activeunit = -1;
 }
 
-void
-opengl_texture::set_filtering() const
+void opengl_texture::set_filtering(GLenum target) const
 {
     // default texture mode
-    ::glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-    ::glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+	::glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	::glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
     if( ( Global.AnisotropicFiltering >= 0 )
      && ( GLAD_GL_EXT_texture_filter_anisotropic ||  GLAD_GL_ARB_texture_filter_anisotropic) ) {
         // anisotropic filtering
-        ::glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, Global.AnisotropicFiltering );
+		::glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, Global.AnisotropicFiltering);
     }
 
     if( Global.LegacyRenderer ) {
@@ -1207,7 +1366,7 @@ opengl_texture::downsize( GLuint const Format ) {
             // can't go any smaller
             break;
         }
-
+		
         WriteLog( "Texture pixelcount exceeds specified limits, downsampling data" );
         // trim potential odd texture sizes
         data_width  -= ( data_width % 2 );
@@ -1215,7 +1374,7 @@ opengl_texture::downsize( GLuint const Format ) {
         switch( Format ) {
 
             case GL_RGB:  { downsample< glm::tvec3<std::uint8_t> >( data_width, data_height, data.data() ); break; }
-            case GL_BGRA:
+		    case GL_BGRA:
             case GL_RGBA: { downsample< glm::tvec4<std::uint8_t> >( data_width, data_height, data.data() ); break; }
             default:      { break; }
         }

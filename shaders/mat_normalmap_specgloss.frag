@@ -1,12 +1,6 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-in mat3 f_tbn;
-
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
 
 #include <common>
+#include <vertexoutput.glsl>
 
 layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
@@ -33,7 +27,7 @@ uniform sampler2D specgloss;
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 void main()
 {
 	vec4 tex_color = texture(diffuse, f_coord);
@@ -48,8 +42,8 @@ void main()
 
 	vec3 normal;
 	normal.xy = (texture(normalmap, f_coord).rg * 2.0 - 1.0);
-	normal.z = sqrt(1.0 - clamp((dot(normal.xy, normal.xy)), 0.0, 1.0));
-	vec3 fragnormal = normalize(f_tbn * normalize(normal.xyz));
+	normal.z = sqrt(max(0., 1. - dot(normal.xy, normal.xy)));
+	vec3 fragnormal = normalize(getTbn() * normal);
 	float reflectivity = param[1].z * texture(normalmap, f_coord).a;
 	float specularity = texture(specgloss, f_coord).r;
 	glossiness = texture(specgloss, f_coord).g * abs(param[1].w);

@@ -483,6 +483,104 @@ void TDynamicObject::SetPneumatic(bool front, bool red)
     } // który pokazywać z tyłu
 }
 
+void TDynamicObject::EvaluateAnimSource(DynamicAnimTypes type, int index, float &current,
+                                        float &future)
+{
+	// TODO implement derivatives for motion vectors
+	switch (type)
+	{
+	case ANIM_WHEELS:
+	{
+		if (index >= 3)
+			throw std::runtime_error("Illegal wheel index");
+		auto wheel_angle = glm::dvec2{dWheelAngle[index], m_future_wheels_angle[index]} / 360.;
+		wheel_angle -= glm::floor(wheel_angle); // Normalize angle *before* reducing precision!
+		current = wheel_angle[0];
+		future = wheel_angle[1];
+		break;
+	}
+	case ANIM_DOORS:
+	{
+		const auto &door{
+		    MoverParameters->Doors.instances[((index & 1) == 0 ? side::right : side::left)]};
+
+		current = future =
+		    door.position; // TODO implement door position derivative for motion vectors
+		break;
+	}
+
+	case ANIM_BUFFERS:
+	{
+		if (index < 0 || index >= 2)
+			throw std::runtime_error("Illegal coupler index");
+		const auto &coupler = MoverParameters->Couplers[index];
+		if (coupler.has_adapter())
+		{
+			current = future = 0.f;
+			return;
+		}
+		auto const dist{clamp(coupler.Dist / 2.0, -coupler.DmaxB, 0.0)};
+		current = future = -dist;
+		break;
+	}
+	case ANIM_PANTS:
+	{
+		if (!pants || index < 0 || index > iAnimType[ANIM_PANTS])
+			throw std::runtime_error("Illegal pantograph index");
+		auto pant = pants[index].fParamPants;
+		current = future = pant->PantWys;
+		break;
+	}
+	case ANIM_DOORSTEPS:
+	{
+		const auto &door{
+		    MoverParameters->Doors.instances[((index & 1) == 0 ? side::right : side::left)]};
+
+		current = future = door.step_position;
+		break;
+	}
+	case ANIM_MIRRORS:
+	{
+		auto const isactive{
+		    (MoverParameters->CabOccupied > 0 ? ((index >> 4) == end::front ? 1.0 : 0.0) :
+		     MoverParameters->CabOccupied < 0 ? ((index >> 4) == end::rear ? 1.0 : 0.0) :
+		                                        0.0)};
+
+		current = future = index & 1 ? dMirrorMoveR * isactive : dMirrorMoveL * isactive;
+		break;
+	}
+	case ANIM_CUTOFF:
+	{
+		// TODO implement precise reverser position for steam engines
+		current = future = .5f + (.5f * (float)MoverParameters->DirActive);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void TDynamicObject::UpdateAnim2()
+{
+	for (const auto &anim : pAnimationsNew)
+	{
+		if (anim.num_sources < 1 || anim.num_sources > 2)
+			continue;
+		float inputs[2];
+		float inputs_future[2];
+		for (int i = 0; i < anim.num_sources; ++i)
+		{
+			EvaluateAnimSource(anim.sources[i], anim.source_indices[i], inputs[i],
+			                   inputs_future[i]);
+			inputs[i] *= anim.source_time_scale[i];
+			inputs_future[i] *= anim.source_time_scale[i];
+		}
+		auto matrix = anim.animation->Evaluate(inputs, anim.num_sources);
+		anim.submodel->SetMatrix(anim.animation->Evaluate(inputs, anim.num_sources));
+		anim.submodel->future_transform = anim.animation->Evaluate(inputs_future, anim.num_sources);
+	}
+}
+
 void TDynamicObject::UpdateAxle(TAnim *pAnim)
 { // animacja osi
     size_t wheel_id = pAnim->dWheelAngle;
@@ -739,6 +837,9 @@ void TDynamicObject::ABuLittleUpdate(double ObjSqrDist)
                 animation.yUpdate( &animation );
             }
         }
+
+        // MichauSto: aktualizacja animacji nowego typu
+        UpdateAnim2();
 
         if( ( mdModel != nullptr )
          && ( ObjSqrDist < ( 50 * 50 ) ) ) {
@@ -6656,6 +6757,61 @@ void TDynamicObject::LoadMMediaFile( std::string const &TypeName, std::string co
             } while( token != "" );
 
         } // internaldata:
+		else if (token == "animations:")
+		{
+			while (true)
+			{
+				token = parser.getToken<std::string>();
+				if (token == "node")
+				{
+					auto submodel =
+					    GetSubmodelFromName(mdModel, parser.getToken<std::string>(false));
+					if (!submodel)
+						throw std::runtime_error("Invalid submodel binding");
+					auto animation = TAnim2::FromFile(parser.getToken<std::string>());
+					if (!animation)
+						throw std::runtime_error("Animation file not found");
+					const static std::unordered_map<std::string_view, DynamicAnimTypes> type_map{
+					    {"wheel", ANIM_WHEELS},       {"door", ANIM_DOORS},
+					    {"buffer", ANIM_BUFFERS},     {"pant", ANIM_PANTS},
+					    {"doorstep", ANIM_DOORSTEPS}, {"mirror", ANIM_MIRRORS},
+					    {"cutoff", ANIM_CUTOFF}};
+					auto num_inputs = parser.getToken<int>();
+					if (num_inputs < 1 || num_inputs > 2)
+						throw std::runtime_error("Invalid input count");
+					DynamicAnimTypes input_types[2];
+					int input_indices[2];
+					float input_scales[2];
+					for (int i = 0; i < num_inputs; ++i)
+					{
+						input_types[i] = type_map.at(parser.getToken<std::string>());
+						input_indices[i] = parser.getToken<int>();
+						input_scales[i] = parser.getToken<float>();
+					}
+
+					auto &entry = pAnimationsNew.emplace_back();
+					entry.animation = animation;
+					entry.submodel = submodel;
+					entry.num_sources = num_inputs;
+					for (int i = 0; i < num_inputs; ++i)
+					{
+						entry.sources[i] = input_types[i];
+						entry.source_indices[i] = input_indices[i];
+						entry.source_time_scale[i] = input_scales[i];
+					}
+          
+          submodel->WillBeAnimated();
+				}
+				else if (token.empty() || token == "endanimations")
+				{
+					break;
+				}
+				else
+				{
+					throw std::runtime_error("Unexpected token");
+				}
+			}
+		} // animations:
 
 	} while( token != "" );
 

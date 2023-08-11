@@ -29,6 +29,7 @@ http://mozilla.org/MPL/2.0/.
 #include "gl/glsl_common.h"
 #include "gl/pbo.h"
 #include "gl/query.h"
+#include "gl/bloom.h"
 
 // bare-bones render controller, in lack of anything better yet
 class opengl33_renderer : public gfx_renderer {
@@ -223,6 +224,8 @@ class opengl33_renderer : public gfx_renderer {
 		std::unique_ptr<opengl_texture> main_texd;
 		std::unique_ptr<opengl_texture> main_tex;
 
+		std::unique_ptr<Bloom> bloom;
+
         // final HDR buffer (also serving as msaa resolve buffer when not using motion blur)
 		std::unique_ptr<gl::framebuffer> main2_fb;
 		std::unique_ptr<opengl_texture> main2_tex;
@@ -384,7 +387,8 @@ class opengl33_renderer : public gfx_renderer {
 	std::unique_ptr<gl::program> m_line_shader;
 	std::unique_ptr<gl::program> m_freespot_shader;
     std::unique_ptr<gl::program> m_billboard_shader;
-    std::unique_ptr<gl::program> m_celestial_shader;
+    std::unique_ptr<gl::program> m_sun_shader;
+    std::unique_ptr<gl::program> m_moon_shader;
     std::unique_ptr<gl::program> m_hiddenarea_shader;
     std::unique_ptr<gl::program> m_copy_shader;
 

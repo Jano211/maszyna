@@ -1,12 +1,7 @@
-in vec3 f_normal;
-in vec2 f_coord;
-in vec4 f_pos;
-in mat3 f_tbn;
-
-in vec4 f_clip_pos;
-in vec4 f_clip_future_pos;
 
 #include <common>
+#include <vertexoutput.glsl>
+
 
 layout(location = 0) out vec4 out_color;
 #if MOTIONBLUR_ENABLED
@@ -41,7 +36,7 @@ float move_factor = 0.0;
 #include <light_common.glsl>
 #include <apply_fog.glsl>
 #include <tonemapping.glsl>
-
+#include <tbn.glsl>
 void main()
 {
 	//wave distortion
@@ -59,8 +54,8 @@ void main()
 	
 	vec3 normal;
 	normal.xy = (texture(normalmap, texture_coords).rg * 2.0 - 1.0);
-	normal.z = sqrt(1.0 - clamp((dot(normal.xy, normal.xy)), 0.0, 1.0));
-	vec3 fragnormal = normalize(f_tbn * normalize(normal.xyz));
+	normal.z = sqrt(max(0., 1. - dot(normal.xy, normal.xy)));
+	vec3 fragnormal = normalize(getTbn() * normal);
 	float reflectivity = param[1].z * texture(normalmap, texture_coords ).a;
 	float specularity = texture(specgloss, f_coord).r;
 	glossiness = texture(specgloss, f_coord).g * abs(param[1].w);
@@ -89,7 +84,7 @@ void main()
         vec2 a = (f_clip_future_pos.xy / f_clip_future_pos.w) * 0.5 + 0.5;;
         vec2 b = (f_clip_pos.xy / f_clip_pos.w) * 0.5 + 0.5;;
         
-        out_motion = vec4(a - b, 0.0f, 0.0f);
+        out_motion = vec4(a - b, 0.0f, tex_color.a * alpha_mult);
 	}
 #endif
 }

@@ -249,6 +249,10 @@ struct global_settings {
     bool gfx_skiprendering = false;
     int gfx_framebuffer_width = -1;
     int gfx_framebuffer_height = -1;
+	int gfx_bloom_layers = 7;
+	float gfx_bloom_threshold = .8f;
+	float gfx_blom_knee = .5f;
+	float gfx_blom_mix = .05f;
     bool gfx_shadowmap_enabled = true;
     bool gfx_envmap_enabled = true;
     bool gfx_postfx_motionblur_enabled = true;
@@ -257,6 +261,7 @@ struct global_settings {
     GLenum gfx_format_color = GL_RGB16F;
     GLenum gfx_format_depth = GL_DEPTH_COMPONENT32F;
     bool gfx_postfx_chromaticaberration_enabled = true;
+    bool gfx_postfx_bloom_enabled = true;
     bool gfx_skippipeline = false;
     bool gfx_extraeffects = true;
     bool gfx_shadergamma = false;
