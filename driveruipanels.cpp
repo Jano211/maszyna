@@ -1487,6 +1487,9 @@ debug_panel::render_section_settings() {
     // reflection fidelity
     ImGui::SliderInt( ( to_string( Global.reflectiontune.fidelity ) + "###reflectionfidelity" ).c_str(), &Global.reflectiontune.fidelity, 0, 2, "Reflection fidelity" );
     ImGui::SliderInt( ( to_string( Global.gfx_shadow_rank_cutoff ) + "###shadowrankcutoff" ).c_str(), &Global.gfx_shadow_rank_cutoff, 1, 3, "Shadow ranks" );
+	ImGui::DragFloat( "###bloomthreshold", &Global.gfx_bloom_threshold, .1f, 0.f, 0.f, "Bloom threshold = %.3f" );
+    ImGui::DragFloat( "###bloomknee", &Global.gfx_blom_knee, .01f, 0.f, 0.f, "Bloom knee = %.3f" );
+    ImGui::DragFloat( "###bloommix", &Global.gfx_blom_mix, .01f, 0.f, 0.f, "Bloom mix = %.3f" );
     if( ImGui::SliderFloat( ( to_string( std::abs( Global.gfx_shadow_angle_min ), 2 ) + "###shadowanglecutoff" ).c_str(), &Global.gfx_shadow_angle_min, -1.0, -0.2, "Shadow angle cutoff" ) ) {
         Global.gfx_shadow_angle_min = quantize( Global.gfx_shadow_angle_min, 0.05f );
     };
