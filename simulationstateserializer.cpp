@@ -155,7 +155,14 @@ state_serializer::deserialize_continue(std::shared_ptr<deserializer_state> state
 	 && ( state->scenariofile != "$.scn" ) ) {
 		// if we didn't find usable binary version of the scenario files, create them now for future use
 		// as long as the scenario file wasn't rainsted-created base file override
-		Region->serialize( state->scenariofile );
+			if (false == Scratchpad.binary.terrain_included)
+			{
+			    Region->serialize(state->scenariofile);
+		    }
+		    else
+		    {  
+			    Region->serialize(Scratchpad.terrain_name);
+            }
 	}
 
 	return false;
